@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: ui-module-deploy
+objects:
+  - apiVersion: chrome.example.com/v1
+    kind: ChromeDynamicUI
+    metadata:
+      name: ui-module
+    spec:
+      title: "UI Module"
+      module:
+        manifestLocation: "/apps/ui-module/fed-mods.json"
+        modules:
+        - name: "Module 1"
+          path:
+            pathname: "/foo/bar"
+            exact: true
+            module: "./RootApp"
+            props:
+              input: value
