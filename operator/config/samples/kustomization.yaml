@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- v1alpha1_chromedynamicui.yaml
+- v1alpha1_chromeuimodules.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

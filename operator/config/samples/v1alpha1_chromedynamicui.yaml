@@ -1,0 +1,9 @@
+apiVersion: martin.com/v1alpha1
+kind: ChromeDynamicUI
+metadata:
+  labels:
+    app.kubernetes.io/name: operator
+    app.kubernetes.io/managed-by: kustomize
+  name: chromedynamicui-sample
+spec:
+  # TODO(user): Add fields here
