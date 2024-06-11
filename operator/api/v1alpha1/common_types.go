@@ -15,3 +15,8 @@ type UiModule struct {
 	ManifestLocation string            `json:"manifestLocation"`
 	Routes           []RouteDefinition `json:"routes"`
 }
+
+type FedModule struct {
+	UiModule
+	Name string `json:"name"`
+}

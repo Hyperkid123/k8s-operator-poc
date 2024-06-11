@@ -41,8 +41,7 @@ type ChromeUIModulesSpec struct {
 
 	// Foo is an example field of ChromeUIModules. Edit chromeuimodules_types.go to remove/update
 	UIModuleTemplates *[]string `json:"ui-module-templates"`
-	// +optional
-	ConfigMap string `json:"configMap,omitempty"`
+	ConfigMap         string    `json:"configMap,omitempty"`
 }
 
 // ChromeUIModulesStatus defines the observed state of ChromeUIModules

@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: chrome-service
 spec:
+  configMap: 'chrome-config-map' 
   ui-module-templates:
   - ui-module
   - ui-module-2
