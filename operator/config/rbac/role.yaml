@@ -5,6 +5,44 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - martin.com
+  resources:
+  - chromedynamicuis
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - martin.com
+  resources:
+  - chromedynamicuis/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - martin.com
+  resources:
+  - chromedynamicuis/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - martin.com
   resources:
   - chromeuimodules

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/Hyperkid123/chrome-like/api/v1alpha1"
@@ -42,23 +43,38 @@ type ChromeDynamicUIReconciler struct {
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/finalizers,verbs=update
+
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules,verbs=get;list;watch
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/status,verbs=get
+
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+
+// +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/finalizers,verbs=update
+
 func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	dynamicModules := &v1alpha1.ChromeUIModules{}
-	dynamicUi := &v1alpha1.ChromeDynamicUI{}
+	// cronJob := &batchv1.CronJob{}
+	// // get the cron job
 
-	// reference to different CRDs
-	// if err := ctrl.SetControllerReference(dynamicUi, dynamicModules, r.Scheme); err != nil {
-	// 	return ctrl.Result{}, err
+	// err := r.Get(ctx, req.NamespacedName, cronJob)
+	// if err != nil {
+	// 	log.Error(err, "Failed to fetch CronJob")
+	// 	return ctrl.Result{}, client.IgnoreNotFound(err)
 	// }
 
+	finalizerName := "finalizer.martin.com"
+
+	dynamicModules := &v1alpha1.ChromeUIModules{}
+	dynamicUi := &v1alpha1.ChromeDynamicUI{}
 	err := r.Get(ctx, req.NamespacedName, dynamicUi)
 	if err != nil {
-		log.Error(err, "Failed to get ChromeDynamicUI resource")
-		return ctrl.Result{}, err
+		if errors.IsNotFound(err) {
+			log.Info("ChromeDynamicUI resource not found")
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	log.Info(fmt.Sprintf("Reconciling ChromeDynamicUI; namespace: %s; name: %s", dynamicModules.Namespace, dynamicModules.Name))
@@ -92,78 +108,149 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	configMapName := dynamicModules.Spec.ConfigMap
 	foundConfigMap := &corev1.ConfigMap{}
 	err = r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: dynamicModules.Namespace}, foundConfigMap)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("ConfigMap not found; Creating default")
-			defaultFedModules := []v1alpha1.FedModule{}
-			for _, def := range *dynamicModules.Spec.UIModuleTemplates {
-				if def == uiFedModule.Name {
-					defaultFedModules = append(defaultFedModules, *uiFedModule)
-					break
-				}
-			}
 
-			b, err := json.Marshal(defaultFedModules)
-			if err != nil {
-				log.Error(err, "Failed to marshal defaultFedModules")
-				return ctrl.Result{}, err
-			}
-			s := string(b)
-			foundConfigMap.APIVersion = "v1"
-			foundConfigMap.Namespace = dynamicModules.Namespace
-			foundConfigMap.Kind = "ConfigMap"
-			foundConfigMap.Name = configMapName
-			foundConfigMap.Data = map[string]string{
-				"fed-modules": s,
-			}
-
-			err = r.Create(ctx, foundConfigMap)
-			if err != nil {
-				log.Error(err, "Failed to create ConfigMap")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
-		}
+	if err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "Failed to get ConfigMap")
 		return ctrl.Result{}, err
-	} else {
-		log.Info("Found chrome-service ConfigMap")
-		currentFedModules := []v1alpha1.FedModule{}
-		err = json.Unmarshal([]byte(foundConfigMap.Data["fed-modules"]), &currentFedModules)
+	}
+
+	if dynamicUi.ObjectMeta.DeletionTimestamp.IsZero() && errors.IsNotFound(err) {
+		// create default config map if it does not exist
+		log.Info("ConfigMap not found; Creating default")
+		cm, err := createDefaultConfigMap(dynamicModules, uiFedModule, configMapName)
 		if err != nil {
-			log.Error(err, "Failed to unmarshal fed-modules")
+			log.Error(err, "Failed to create ConfigMap")
 			return ctrl.Result{}, err
 		}
 
-		found := false
-		for i, module := range currentFedModules {
-			if module.Name == uiFedModule.Name {
-				currentFedModules[i] = *uiFedModule
-				found = true
-				break
+		err = r.Create(ctx, cm)
+		if err != nil {
+			log.Error(err, "Failed to create ConfigMap")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
+	}
+
+	if err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+	// if the deletion timestamp is zero, resource is not being delete and we can reconcile as usual
+	// if it is not zero, resource has to be removed from the config map
+	if dynamicUi.ObjectMeta.DeletionTimestamp.IsZero() {
+
+		if !controllerutil.ContainsFinalizer(dynamicUi, finalizerName) {
+			controllerutil.AddFinalizer(dynamicUi, finalizerName)
+			err := r.Update(ctx, dynamicUi)
+			if err != nil {
+				log.Error(err, "Failed to add finalizer")
+				return ctrl.Result{}, err
 			}
 		}
+	} else {
+		log.Info("Resource scheduled for deletion!")
+		if controllerutil.ContainsFinalizer(dynamicUi, finalizerName) {
+			log.Info("Deleting external resources")
+			err = r.deleteExternalResources(foundConfigMap, uiFedModule)
+			if err != nil {
+				log.Error(err, "Failed to delete external resources")
+				return ctrl.Result{}, err
+			}
+			err = r.Update(ctx, foundConfigMap)
+			if err != nil {
+				log.Error(err, "Failed to delete module from ConfigMap")
+				return ctrl.Result{}, err
+			}
+			controllerutil.RemoveFinalizer(dynamicUi, finalizerName)
+			err = r.Update(ctx, dynamicUi)
 
-		if !found {
-			currentFedModules = append(currentFedModules, *uiFedModule)
+			if err != nil {
+				log.Error(err, "Failed to remove finalizer")
+				return ctrl.Result{}, err
+			}
+
 		}
+		return ctrl.Result{}, nil
 
-		b, err := json.Marshal(currentFedModules)
-		if err != nil {
-			log.Error(err, "Failed to marshal currentFedModules")
-			return ctrl.Result{}, err
-		}
+	}
 
-		foundConfigMap.Data["fed-modules"] = string(b)
+	log.Info("Found chrome-service ConfigMap")
+	err = updateConfigMap(foundConfigMap, uiFedModule)
+	if err != nil {
+		log.Error(err, "Failed to update ConfigMap")
+		return ctrl.Result{}, err
+	}
 
-		err = r.Update(ctx, foundConfigMap)
-		if err != nil {
-			log.Error(err, "Failed to update ConfigMap")
-			return ctrl.Result{}, err
-		}
+	err = r.Update(ctx, foundConfigMap)
+	if err != nil {
+		log.Error(err, "Failed to update ConfigMap")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func serializeConfigMapData(fedModules []v1alpha1.FedModule) (string, error) {
+	b, err := json.Marshal(fedModules)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func createDefaultConfigMap(uiModules *v1alpha1.ChromeUIModules, baseModule *v1alpha1.FedModule, configMapName string) (*corev1.ConfigMap, error) {
+	cm := &corev1.ConfigMap{}
+	defaultFedModules := []v1alpha1.FedModule{}
+	for _, def := range *uiModules.Spec.UIModuleTemplates {
+		if def == baseModule.Name {
+			defaultFedModules = append(defaultFedModules, *baseModule)
+			break
+		}
+	}
+
+	b, err := serializeConfigMapData(defaultFedModules)
+	if err != nil {
+		return nil, err
+	}
+	s := string(b)
+	cm.APIVersion = "v1"
+	cm.Namespace = uiModules.Namespace
+	cm.Kind = "ConfigMap"
+	cm.Name = configMapName
+	cm.Data = map[string]string{
+		"fed-modules": s,
+	}
+
+	return cm, nil
+}
+
+func updateConfigMap(cm *corev1.ConfigMap, affectedModule *v1alpha1.FedModule) error {
+	currentFedModules := []v1alpha1.FedModule{}
+	err := json.Unmarshal([]byte(cm.Data["fed-modules"]), &currentFedModules)
+	if err != nil {
+		return err
+	}
+
+	found := false
+	for i, module := range currentFedModules {
+		if module.Name == affectedModule.Name {
+			currentFedModules[i] = *affectedModule
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		currentFedModules = append(currentFedModules, *affectedModule)
+	}
+
+	b, err := serializeConfigMapData(currentFedModules)
+	if err != nil {
+		return err
+	}
+
+	cm.Data["fed-modules"] = string(b)
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -171,4 +258,34 @@ func (r *ChromeDynamicUIReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ChromeDynamicUI{}).
 		Complete(r)
+}
+
+func (r *ChromeDynamicUIReconciler) deleteExternalResources(configMap *corev1.ConfigMap, dynamicUi *v1alpha1.FedModule) error {
+	removeIndex := -1
+	currentModules := []v1alpha1.FedModule{}
+	err := json.Unmarshal([]byte(configMap.Data["fed-modules"]), &currentModules)
+	if err != nil {
+		return err
+	}
+
+	for index, module := range currentModules {
+		if module.Name == dynamicUi.Name {
+			removeIndex = index
+			break
+		}
+	}
+
+	if removeIndex >= 0 {
+		currentModules = append(currentModules[:removeIndex], currentModules[removeIndex+1:]...)
+	}
+
+	b, err := serializeConfigMapData(currentModules)
+	if err != nil {
+		return err
+	}
+
+	configMap.Data["fed-modules"] = string(b)
+
+	fmt.Println("Deleting external resources", dynamicUi)
+	return nil
 }
