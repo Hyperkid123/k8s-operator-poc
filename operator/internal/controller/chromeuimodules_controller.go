@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/Hyperkid123/chrome-like/api/v1alpha1"
 	martincomv1alpha1 "github.com/Hyperkid123/chrome-like/api/v1alpha1"
 )
 
@@ -47,9 +48,19 @@ type ChromeUIModulesReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.2/pkg/reconcile
 func (r *ChromeUIModulesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
+	dynamicModules := &martincomv1alpha1.ChromeUIModules{}
+	dynamicUi := &v1alpha1.ChromeDynamicUI{}
 
-	// TODO(user): your logic here
+	// reference to different CRDs
+	if err := ctrl.SetControllerReference(dynamicModules, dynamicUi, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.Get(ctx, req.NamespacedName, dynamicModules); err != nil {
+		log.Error(err, "unable to get resource ObjStore")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
 	return ctrl.Result{}, nil
 }

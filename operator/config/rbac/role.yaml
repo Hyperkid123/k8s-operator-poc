@@ -7,7 +7,7 @@ rules:
 - apiGroups:
   - martin.com
   resources:
-  - chromedynamicuis
+  - chromeuimodules
   verbs:
   - create
   - delete
@@ -19,13 +19,13 @@ rules:
 - apiGroups:
   - martin.com
   resources:
-  - chromedynamicuis/finalizers
+  - chromeuimodules/finalizers
   verbs:
   - update
 - apiGroups:
   - martin.com
   resources:
-  - chromedynamicuis/status
+  - chromeuimodules/status
   verbs:
   - get
   - patch

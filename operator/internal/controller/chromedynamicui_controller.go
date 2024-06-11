@@ -18,12 +18,17 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/Hyperkid123/chrome-like/api/v1alpha1"
 	martincomv1alpha1 "github.com/Hyperkid123/chrome-like/api/v1alpha1"
 )
 
@@ -36,20 +41,41 @@ type ChromeDynamicUIReconciler struct {
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis/finalizers,verbs=update
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ChromeDynamicUI object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.2/pkg/reconcile
+// +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules,verbs=get;list;watch
+// +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/status,verbs=get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
+	dynamicModules := &v1alpha1.ChromeUIModules{}
+	dynamicUi := &v1alpha1.ChromeDynamicUI{}
 
-	// TODO(user): your logic here
+	// reference to different CRDs
+	// if err := ctrl.SetControllerReference(dynamicUi, dynamicModules, r.Scheme); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
+	err := r.Get(ctx, req.NamespacedName, dynamicUi)
+	if err != nil {
+		log.Error(err, "Failed to get ChromeDynamicUI resource")
+		return ctrl.Result{}, err
+	}
+
+	log.Info(fmt.Sprintf("Reconciling ChromeDynamicUI; namespace: %s; name: %s", dynamicModules.Namespace, dynamicModules.Name))
+	err = r.Get(ctx, types.NamespacedName{
+		Namespace: "default",
+		Name:      "chrome-service",
+	}, dynamicModules)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("ChromeDynamicModule resource not found; requeueing...")
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
+		}
+		log.Error(err, "Failed to get ChromeDynamicModule resource")
+		return ctrl.Result{}, err
+	}
+
+	log.Info(fmt.Sprintln(dynamicUi.Spec))
+	log.Info(fmt.Sprintln("**********************", dynamicModules.Spec.UIModuleTemplates))
 
 	return ctrl.Result{}, nil
 }

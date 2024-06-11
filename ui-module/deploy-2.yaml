@@ -4,14 +4,14 @@ metadata:
   labels:
     app.kubernetes.io/name: operator
     app.kubernetes.io/managed-by: kustomize
-  name: ui-module
+  name: ui-module-2
 spec:
-  name: ui-module
-  title: "UI Module"
+  name: ui-module-2
+  title: "UI Module 2"
   module:
-    manifestLocation: "/apps/ui-module/fed-mods.json"
+    manifestLocation: "/apps/ui-module-2/fed-mods.json"
     routes:
-    - pathname: "/foo/bar"
+    - pathname: "/foo/bar/baz"
       exact: true
       module: "./RootApp"
       props:

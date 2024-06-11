@@ -23,19 +23,33 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+const (
+	PENDING_STATE  = "PENDING"
+	CREATED_STATE  = "CREATED"
+	CREATING_STATE = "CREATING"
+	ERROR_STATE    = "ERROR"
+)
+
+const (
+	configMapField = ".spec.configMap"
+)
+
 // ChromeUIModulesSpec defines the desired state of ChromeUIModules
 type ChromeUIModulesSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of ChromeUIModules. Edit chromeuimodules_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	UIModuleTemplates *[]string `json:"ui-module-templates"`
+	// +optional
+	ConfigMap string `json:"configMap,omitempty"`
 }
 
 // ChromeUIModulesStatus defines the observed state of ChromeUIModules
 type ChromeUIModulesStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	State string `json:"state"`
 }
 
 // +kubebuilder:object:root=true

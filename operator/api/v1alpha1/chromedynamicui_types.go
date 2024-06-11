@@ -23,22 +23,6 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type RouteDefinition struct {
-	Pathname   string `json:"pathname"`
-	Exact      bool   `json:"exact,omitempty"`
-	Module     string `json:"module"`
-	ImportName string `json:"importName,omitempty"`
-	// +kubebuilder:validation:XPreserveUnknownFields
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Type=object
-	Props map[string]string `json:"props,omitempty"`
-}
-
-type UiModule struct {
-	ManifestLocation string            `json:"manifestLocation"`
-	Routes           []RouteDefinition `json:"routes"`
-}
-
 // ChromeDynamicUISpec defines the desired state of ChromeDynamicUI
 type ChromeDynamicUISpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
