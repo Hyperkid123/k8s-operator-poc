@@ -1,12 +1,30 @@
-apiVersion: martin.com/v1alpha1
-kind: ChromeUIModules
+apiVersion: apps/v1
+kind: Deployment
 metadata:
+  name: k8s-web-server
   labels:
-    app.kubernetes.io/name: operator
-    app.kubernetes.io/managed-by: kustomize
-  name: chrome-service
+    app: web
 spec:
-  configMap: 'chrome-config-map' 
-  ui-module-templates:
-  - ui-module
-  - ui-module-2
+  selector:
+    matchLabels:
+      app: web
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: k8s-web-server
+          image: k8s-web-server
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          env:
+            - name: FED_MODULES
+              valueFrom:
+                configMapKeyRef:
+                  name: chrome-config-map
+                  key: fed-modules

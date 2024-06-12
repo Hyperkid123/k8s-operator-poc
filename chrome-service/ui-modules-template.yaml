@@ -1,0 +1,12 @@
+apiVersion: martin.com/v1alpha1
+kind: ChromeUIModules
+metadata:
+  labels:
+    app.kubernetes.io/name: operator
+    app.kubernetes.io/managed-by: kustomize
+  name: chrome-service
+spec:
+  configMap: 'chrome-config-map' 
+  ui-module-templates:
+  - ui-module
+  - ui-module-2
