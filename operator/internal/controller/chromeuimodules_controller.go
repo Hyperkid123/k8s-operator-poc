@@ -18,14 +18,18 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/Hyperkid123/chrome-like/api/v1alpha1"
-	martincomv1alpha1 "github.com/Hyperkid123/chrome-like/api/v1alpha1"
+	v1alpha1 "github.com/Hyperkid123/chrome-like/api/v1alpha1"
 )
 
 // ChromeUIModulesReconciler reconciles a ChromeUIModules object
@@ -38,36 +42,110 @@ type ChromeUIModulesReconciler struct {
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ChromeUIModules object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.2/pkg/reconcile
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch
 func (r *ChromeUIModulesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	dynamicModules := &martincomv1alpha1.ChromeUIModules{}
-	dynamicUi := &v1alpha1.ChromeDynamicUI{}
-
-	// reference to different CRDs
-	if err := ctrl.SetControllerReference(dynamicModules, dynamicUi, r.Scheme); err != nil {
-		return ctrl.Result{}, err
-	}
+	dynamicModules := &v1alpha1.ChromeUIModules{}
+	uiModules := &v1alpha1.ChromeDynamicUIList{}
 
 	if err := r.Get(ctx, req.NamespacedName, dynamicModules); err != nil {
-		log.Error(err, "unable to get resource ObjStore")
+		log.Error(err, "unable to get resource ChromeUIModules")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	err := r.List(ctx, uiModules)
+	if err != nil {
+		log.Error(err, "unable to list ChromeDynamicUI")
+		return ctrl.Result{}, err
+	}
+
+	configMapName := dynamicModules.Spec.ConfigMap
+	foundConfigMap := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: dynamicModules.Namespace}, foundConfigMap)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("ConfigMap chrome-service not found. Creating a new one")
+			cm := createEmptyConfigMap(configMapName)
+			r.Create(ctx, cm)
+			return ctrl.Result{}, nil
+		}
+
+		log.Error(err, "Error fetching ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	newFedModules, err := validateConfigMap(uiModules, *dynamicModules.Spec.UIModuleTemplates)
+	if err != nil {
+		log.Error(err, "Error validating ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	b, err := json.Marshal(newFedModules)
+	if err != nil {
+		log.Error(err, "Error marshalling ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	foundConfigMap.Data["fed-modules"] = string(b)
+
+	err = r.Update(ctx, foundConfigMap)
+	if err != nil {
+		log.Error(err, "Error updating ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("ConfigMap updated; Updating ui modules")
+	log.Info(fmt.Sprintln(*dynamicModules.Spec.UIModuleTemplates))
+	log.Info(fmt.Sprintln("Number of UI modules: ", len(uiModules.Items)))
+
 	return ctrl.Result{}, nil
+}
+
+type validTemplates struct {
+	Name  string
+	Index int
+}
+
+func validateConfigMap(uiModules *v1alpha1.ChromeDynamicUIList, availableTemplates []string) ([]v1alpha1.FedModule, error) {
+	indexMap := []validTemplates{}
+	for _, template := range availableTemplates {
+		for index, module := range uiModules.Items {
+			if module.Name == template {
+				indexMap = append(indexMap, validTemplates{Name: module.Name, Index: index})
+				break
+			}
+		}
+	}
+
+	newFedModules := []v1alpha1.FedModule{}
+	for _, value := range indexMap {
+		newModule := v1alpha1.FedModule{
+			UiModule: uiModules.Items[value.Index].Spec.Module,
+			Name:     uiModules.Items[value.Index].Spec.Name,
+		}
+		newFedModules = append(newFedModules, newModule)
+	}
+
+	return newFedModules, nil
+}
+
+func createEmptyConfigMap(configMapName string) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{}
+	cm.APIVersion = "v1"
+	cm.Namespace = "default"
+	cm.Kind = "ConfigMap"
+	cm.Name = configMapName
+	cm.Data = map[string]string{
+		"fed-modules": "[]",
+	}
+	return &corev1.ConfigMap{}
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ChromeUIModulesReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&martincomv1alpha1.ChromeUIModules{}).
+		For(&v1alpha1.ChromeUIModules{}).
 		Complete(r)
 }

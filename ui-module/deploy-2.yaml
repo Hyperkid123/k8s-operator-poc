@@ -16,3 +16,4 @@ spec:
       module: "./RootApp"
       props:
         input: value
+        foo: bar

@@ -91,8 +91,6 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// var configMapVersion string
-	// var fedModules []v1alpha1.FedModule
 	if dynamicModules.Spec.ConfigMap == "" {
 		log.Info("ChromeDynamicModule config map not ready; requeueing...")
 
