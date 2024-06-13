@@ -2,4 +2,5 @@
 resources:
 - v1alpha1_chromedynamicui.yaml
 - v1alpha1_chromeuimodules.yaml
+- v1alpha1_deployment.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

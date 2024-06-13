@@ -18,9 +18,12 @@ package controller
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,7 +45,11 @@ type ChromeUIModulesReconciler struct {
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=martin.com,resources=chromeuimodules/finalizers,verbs=update
 
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="martin.com",resources=configmaps,verbs=get;list;watch;create;update;patch
+
+// +kubebuilder:rbac:groups="martin.com",resources=deployments,verbs=list;watch;update;patch
+
+// +kubebuilder:rbac:groups=martin.com,resources=chromedynamicuis,verbs=get;list;watch;create;update;patch;delete
 func (r *ChromeUIModulesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	dynamicModules := &v1alpha1.ChromeUIModules{}
@@ -56,6 +63,24 @@ func (r *ChromeUIModulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	err := r.List(ctx, uiModules)
 	if err != nil {
 		log.Error(err, "unable to list ChromeDynamicUI")
+		return ctrl.Result{}, err
+	}
+
+	labels := map[string]string{
+		"chrome-operator-reload": "true",
+	}
+
+	listOpts := []client.ListOption{
+		client.InNamespace("default"),
+		client.MatchingLabels(labels),
+	}
+
+	deploymentList := &appsv1.DeploymentList{}
+
+	err = r.List(ctx, deploymentList, listOpts...)
+
+	if err != nil {
+		log.Error(err, "unable to list Deployments")
 		return ctrl.Result{}, err
 	}
 
@@ -99,12 +124,46 @@ func (r *ChromeUIModulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	log.Info(fmt.Sprintln(*dynamicModules.Spec.UIModuleTemplates))
 	log.Info(fmt.Sprintln("Number of UI modules: ", len(uiModules.Items)))
 
+	for _, deployment := range deploymentList.Items {
+		// log.Info(fmt.Sprintln("*******************, Deployment: ", deployment.Labels, "Name: ", deployment.Name, "Should reload: ", deployment.Labels["chrome-operator-reload"], "Anotations: ", deployment.Annotations))
+		if deployment.Labels["chrome-operator-reload"] == "true" {
+			checksum, err := generateConfigMapChecksum(foundConfigMap.Data["fed-modules"])
+			if err != nil {
+				log.Error(err, "Error generating checksum")
+				return ctrl.Result{}, err
+			}
+			deployment.Annotations["chrome-operator-checksum/configmap"] = checksum
+			if deployment.Spec.Template.ObjectMeta.Annotations == nil {
+				deployment.Spec.Template.ObjectMeta.Annotations = map[string]string{}
+			}
+			deployment.Spec.Template.ObjectMeta.Annotations["chrome-operator-checksum/configmap"] = checksum
+			err = r.Update(ctx, &deployment)
+			if err != nil {
+				log.Error(err, "Error updating Deployment")
+				return ctrl.Result{}, err
+			}
+
+			log.Info(fmt.Sprintln("Updated Deployment: ", deployment.Name, " with checksum: ", checksum))
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
 type validTemplates struct {
 	Name  string
 	Index int
+}
+
+func generateConfigMapChecksum(value string) (string, error) {
+	hasher := sha1.New()
+	_, err := hasher.Write([]byte(value))
+	if err != nil {
+		return "", err
+	}
+
+	checksum := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	return checksum, nil
 }
 
 func validateConfigMap(uiModules *v1alpha1.ChromeDynamicUIList, availableTemplates []string) ([]v1alpha1.FedModule, error) {

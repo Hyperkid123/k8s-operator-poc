@@ -1,12 +1,9 @@
 apiVersion: martin.com/v1alpha1
-kind: ChromeUIModules
+kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/name: operator
     app.kubernetes.io/managed-by: kustomize
-  name: chrome-service
+  name: deployment-sample
 spec:
-  configMap: 'chrome-config-map' 
-  ui-module-templates:
-  - ui-module
-  # - ui-module-2
+  # TODO(user): Add fields here

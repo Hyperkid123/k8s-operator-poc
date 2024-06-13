@@ -68,3 +68,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - martin.com
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - martin.com
+  resources:
+  - deployments
+  verbs:
+  - list
+  - patch
+  - update
+  - watch

@@ -71,7 +71,10 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	err := r.Get(ctx, req.NamespacedName, dynamicUi)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			log.Info("ChromeDynamicUI resource not found")
+			if err != nil {
+				log.Error(err, "Failed to reconcile ChromeDynamicModule")
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -93,9 +96,7 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if dynamicModules.Spec.ConfigMap == "" {
 		log.Info("ChromeDynamicModule config map not ready; requeueing...")
-
-		err = fmt.Errorf("ChromeDynamicModule config map name not configured")
-		return ctrl.Result{}, err
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
 	}
 
 	uiFedModule := &v1alpha1.FedModule{
@@ -108,26 +109,26 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	err = r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: dynamicModules.Namespace}, foundConfigMap)
 
 	if err != nil && !errors.IsNotFound(err) {
-		log.Error(err, "Failed to get ConfigMap")
-		return ctrl.Result{}, err
-	}
-
-	if dynamicUi.ObjectMeta.DeletionTimestamp.IsZero() && errors.IsNotFound(err) {
-		// create default config map if it does not exist
-		log.Info("ConfigMap not found; Creating default")
-		cm, err := createDefaultConfigMap(dynamicModules, uiFedModule, configMapName)
-		if err != nil {
-			log.Error(err, "Failed to create ConfigMap")
-			return ctrl.Result{}, err
-		}
-
-		err = r.Create(ctx, cm)
-		if err != nil {
-			log.Error(err, "Failed to create ConfigMap")
-			return ctrl.Result{}, err
-		}
+		log.Info("ChromeDynamicModule config map not ready; requeueing...")
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
 	}
+
+	// if dynamicUi.ObjectMeta.DeletionTimestamp.IsZero() && errors.IsNotFound(err) {
+	// 	// create default config map if it does not exist
+	// 	log.Info("ConfigMap not found; Creating default")
+	// 	cm, err := createDefaultConfigMap(dynamicModules, uiFedModule, configMapName)
+	// 	if err != nil {
+	// 		log.Error(err, "Failed to create ConfigMap")
+	// 		return ctrl.Result{}, err
+	// 	}
+
+	// 	err = r.Create(ctx, cm)
+	// 	if err != nil {
+	// 		log.Error(err, "Failed to create ConfigMap")
+	// 		return ctrl.Result{}, err
+	// 	}
+	// 	return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, nil
+	// }
 
 	if err != nil {
 		log.Error(err, "Failed to get ConfigMap")
@@ -136,7 +137,6 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// if the deletion timestamp is zero, resource is not being delete and we can reconcile as usual
 	// if it is not zero, resource has to be removed from the config map
 	if dynamicUi.ObjectMeta.DeletionTimestamp.IsZero() {
-
 		if !controllerutil.ContainsFinalizer(dynamicUi, finalizerName) {
 			controllerutil.AddFinalizer(dynamicUi, finalizerName)
 			err := r.Update(ctx, dynamicUi)
@@ -172,16 +172,24 @@ func (r *ChromeDynamicUIReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	}
 
-	log.Info("Found chrome-service ConfigMap")
-	err = updateConfigMap(foundConfigMap, uiFedModule)
-	if err != nil {
-		log.Error(err, "Failed to update ConfigMap")
-		return ctrl.Result{}, err
-	}
+	// log.Info("Found chrome-service ConfigMap")
+	// err = updateConfigMap(foundConfigMap, uiFedModule)
+	// if err != nil {
+	// 	log.Error(err, "Failed to update ConfigMap")
+	// 	return ctrl.Result{}, err
+	// }
 
-	err = r.Update(ctx, foundConfigMap)
+	// err = r.Update(ctx, foundConfigMap)
+	// if err != nil {
+	// 	log.Error(err, "Failed to update ConfigMap")
+	// 	return ctrl.Result{}, err
+	// }
+
+	log.Info("Reconciling the chrome-service list!!!!!!!!!!!!!!!!!!")
+	err = r.Update(ctx, dynamicModules)
+
 	if err != nil {
-		log.Error(err, "Failed to update ConfigMap")
+		log.Error(err, "Failed to reconcile ChromeDynamicModule")
 		return ctrl.Result{}, err
 	}
 

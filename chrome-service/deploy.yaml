@@ -4,6 +4,8 @@ metadata:
   name: k8s-web-server
   labels:
     app: web
+    chrome-operator-reload: "true"
+  annotations:
 spec:
   selector:
     matchLabels:

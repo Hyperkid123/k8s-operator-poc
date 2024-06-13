@@ -13,6 +13,8 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the Project itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- deployment_editor_role.yaml
+- deployment_viewer_role.yaml
 - chromeuimodules_editor_role.yaml
 - chromeuimodules_viewer_role.yaml
 - chromedynamicui_editor_role.yaml

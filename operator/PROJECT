@@ -24,4 +24,12 @@ resources:
   kind: ChromeUIModules
   path: github.com/Hyperkid123/chrome-like/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: martin.com
+  kind: Deployment
+  path: github.com/Hyperkid123/chrome-like/api/v1alpha1
+  version: v1alpha1
 version: "3"
